@@ -6,6 +6,7 @@ import br.ufc.poo.corebank.domain.model.conta.TipoContaTecnica;
 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.persistence.LockModeType;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +16,10 @@ public class ContaRepository implements PanacheRepositoryBase<Conta, UUID> {
 
     public Uni<Conta> buscarPorId(UUID contaId) {
         return findById(contaId);
+    }
+
+    public Uni<Conta> buscarPorIdComBloqueioPessimista(UUID contaId) {
+        return findById(contaId, LockModeType.PESSIMISTIC_WRITE);
     }
 
     public Uni<Conta> buscarPorNumeroConta(String numeroConta) {
