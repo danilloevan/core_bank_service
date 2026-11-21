@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: corebank-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: corebank_db
+      POSTGRES_USER: corebank
+      POSTGRES_PASSWORD: corebank_secret
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U corebank -d corebank_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
