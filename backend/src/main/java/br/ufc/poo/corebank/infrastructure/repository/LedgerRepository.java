@@ -8,7 +8,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -43,6 +45,21 @@ public class LedgerRepository implements PanacheRepositoryBase<LancamentoContabi
                 .onItem().transform(LancamentoContabil::normalizarValorMonetario);
     }
 
+    public Uni<BigDecimal> calcularSaldoAntesDeInstante(UUID contaId, Instant instanteInicioPeriodo) {
+        return getSession()
+                .onItem().transformToUni(sessaoHibernate ->
+                        sessaoHibernate.createSelectionQuery(
+                                        "SELECT COALESCE(SUM(CASE WHEN l.tipoLancamento = :tipoCredito THEN l.valor ELSE -l.valor END), 0) "
+                                                + "FROM LancamentoContabil l WHERE l.conta.id = :contaId AND l.criadoEm < :instanteInicioPeriodo",
+                                        BigDecimal.class)
+                                .setParameter("tipoCredito", TipoLancamento.CREDITO)
+                                .setParameter("contaId", contaId)
+                                .setParameter("instanteInicioPeriodo", instanteInicioPeriodo)
+                                .getSingleResult()
+                )
+                .onItem().transform(LancamentoContabil::normalizarValorMonetario);
+    }
+
     public Uni<BigDecimal> somarPorContaETipo(UUID contaId, TipoLancamento tipoLancamento) {
         return getSession()
                 .onItem().transformToUni(sessaoHibernate ->
@@ -63,6 +80,32 @@ public class LedgerRepository implements PanacheRepositoryBase<LancamentoContabi
 
     public Uni<List<LancamentoContabil>> listarPorContaIdOrdenadoPorData(UUID contaId) {
         return list("conta.id = ?1 order by criadoEm asc", contaId);
+    }
+
+    public Uni<List<LancamentoContabil>> listarPorContaEPeriodo(
+            UUID contaId,
+            Instant instanteInicioOpcional,
+            Instant instanteFimOpcional,
+            TipoLancamento filtroTipoLancamentoOpcional) {
+        StringBuilder consultaHql = new StringBuilder("conta.id = :contaId");
+        Map<String, Object> parametros = new HashMap<>();
+        parametros.put("contaId", contaId);
+
+        if (instanteInicioOpcional != null) {
+            consultaHql.append(" and criadoEm >= :instanteInicio");
+            parametros.put("instanteInicio", instanteInicioOpcional);
+        }
+        if (instanteFimOpcional != null) {
+            consultaHql.append(" and criadoEm <= :instanteFim");
+            parametros.put("instanteFim", instanteFimOpcional);
+        }
+        if (filtroTipoLancamentoOpcional != null) {
+            consultaHql.append(" and tipoLancamento = :tipoLancamento");
+            parametros.put("tipoLancamento", filtroTipoLancamentoOpcional);
+        }
+
+        consultaHql.append(" order by criadoEm asc");
+        return list(consultaHql.toString(), parametros);
     }
 
     public Uni<List<LancamentoContabil>> listarPorTransacaoId(UUID transacaoId) {
