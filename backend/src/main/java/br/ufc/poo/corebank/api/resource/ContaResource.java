@@ -5,7 +5,9 @@ import br.ufc.poo.corebank.api.dto.AlterarStatusContaRequest;
 import br.ufc.poo.corebank.api.dto.ChavePixResponse;
 import br.ufc.poo.corebank.api.dto.ContaResponse;
 import br.ufc.poo.corebank.api.dto.RegistrarChavePixRequest;
+import br.ufc.poo.corebank.api.dto.SaldoResponse;
 import br.ufc.poo.corebank.application.service.ContaService;
+import br.ufc.poo.corebank.application.service.SaldoService;
 import io.smallrye.mutiny.Uni;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
@@ -21,7 +23,6 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,9 +33,11 @@ import java.util.UUID;
 public class ContaResource {
 
     private final ContaService contaService;
+    private final SaldoService saldoService;
 
-    public ContaResource(ContaService contaService) {
+    public ContaResource(ContaService contaService, SaldoService saldoService) {
         this.contaService = contaService;
+        this.saldoService = saldoService;
     }
 
     @POST
@@ -70,13 +73,24 @@ public class ContaResource {
                 );
     }
 
+    @GET
+    @Path("/{id}/saldo")
+    @Operation(
+            summary = "Consultar saldo dinâmico da conta no Ledger",
+            description = "Calcula em tempo real SUM(CREDITO) - SUM(DEBITO) a partir do histórico imutável de lançamentos contábeis"
+    )
+    public Uni<SaldoResponse> consultarSaldo(@PathParam("id") UUID contaId) {
+        return saldoService.consultarResumoSaldo(contaId)
+                .onItem().transform(SaldoResponse::deDominio);
+    }
+
     @PATCH
     @Path("/{id}/status")
     @Operation(summary = "Alterar status da conta (ATIVA, BLOQUEADA, ENCERRADA)")
     public Uni<ContaResponse> alterarStatusConta(
             @PathParam("id") UUID contaId,
             @Valid AlterarStatusContaRequest requisicao) {
-        return contaService.alterarStatusConta(contaId, requisicao.novoStatus(), BigDecimal.ZERO)
+        return contaService.alterarStatusConta(contaId, requisicao.novoStatus())
                 .onItem().transform(ContaResponse::deDominio);
     }
 
