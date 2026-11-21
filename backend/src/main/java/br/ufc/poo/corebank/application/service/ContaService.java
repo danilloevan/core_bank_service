@@ -16,6 +16,7 @@ import br.ufc.poo.corebank.infrastructure.repository.AgenciaRepository;
 import br.ufc.poo.corebank.infrastructure.repository.ChavePixRepository;
 import br.ufc.poo.corebank.infrastructure.repository.ClienteRepository;
 import br.ufc.poo.corebank.infrastructure.repository.ContaRepository;
+import br.ufc.poo.corebank.infrastructure.repository.LedgerRepository;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.smallrye.mutiny.Uni;
@@ -32,16 +33,19 @@ public class ContaService {
     private final ClienteRepository clienteRepository;
     private final AgenciaRepository agenciaRepository;
     private final ChavePixRepository chavePixRepository;
+    private final LedgerRepository ledgerRepository;
 
     public ContaService(
             ContaRepository contaRepository,
             ClienteRepository clienteRepository,
             AgenciaRepository agenciaRepository,
-            ChavePixRepository chavePixRepository) {
+            ChavePixRepository chavePixRepository,
+            LedgerRepository ledgerRepository) {
         this.contaRepository = contaRepository;
         this.clienteRepository = clienteRepository;
         this.agenciaRepository = agenciaRepository;
         this.chavePixRepository = chavePixRepository;
+        this.ledgerRepository = ledgerRepository;
     }
 
     @WithTransaction
@@ -97,6 +101,17 @@ public class ContaService {
     @WithSession
     public Uni<List<Conta>> listarContasPorTitular(UUID clienteTitularId) {
         return contaRepository.listarContasPorTitularId(clienteTitularId);
+    }
+
+    @WithTransaction
+    public Uni<Conta> alterarStatusConta(UUID contaId, StatusConta novoStatusDesejado) {
+        if (novoStatusDesejado == null) {
+            return Uni.createFrom().failure(new RegraNegocioException("O novo status da conta é obrigatório."));
+        }
+        return ledgerRepository.calcularSaldoAtualPorContaId(contaId)
+                .onItem().transformToUni(saldoAtualNoLedger ->
+                        alterarStatusConta(contaId, novoStatusDesejado, saldoAtualNoLedger)
+                );
     }
 
     @WithTransaction
