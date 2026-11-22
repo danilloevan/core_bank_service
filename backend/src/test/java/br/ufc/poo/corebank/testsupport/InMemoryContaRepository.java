@@ -41,6 +41,13 @@ public class InMemoryContaRepository extends ContaRepository {
     }
 
     @Override
+    public Uni<Boolean> existePorNumeroConta(String numeroConta) {
+        boolean existe = bancoEmMemoria.getContasPorId().values().stream()
+                .anyMatch(conta -> conta.getNumeroConta().equals(numeroConta));
+        return Uni.createFrom().item(existe);
+    }
+
+    @Override
     public Uni<ContaTecnica> buscarContaTecnicaPorTipo(TipoContaTecnica tipoContaTecnica) {
         ContaTecnica contaTecnicaEncontrada = bancoEmMemoria.getContasPorId().values().stream()
                 .filter(ContaTecnica.class::isInstance)

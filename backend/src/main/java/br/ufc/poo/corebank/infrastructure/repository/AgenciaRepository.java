@@ -11,7 +11,8 @@ import java.util.UUID;
 public class AgenciaRepository implements PanacheRepositoryBase<Agencia, UUID> {
 
     public Uni<Agencia> buscarPorCodigo(String codigoAgencia) {
-        return find("codigo", codigoAgencia).firstResult();
+        return find("select a from Agencia a left join fetch a.contas where a.codigo = ?1", codigoAgencia)
+                .firstResult();
     }
 
     public Uni<Agencia> obterOuCriarAgenciaMatriz() {

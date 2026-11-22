@@ -56,23 +56,41 @@ public class ContaService {
                 )
                 .onItem().transformToUni(clienteTitular ->
                         resolverAgencia(codigoAgenciaOpcional)
-                                .onItem().transformToUni(agenciaDestino -> {
-                                    Conta novaConta = instanciarContaPolimorficamentePorPerfilCliente(
-                                            agenciaDestino,
-                                            clienteTitular
-                                    );
-                                    agenciaDestino.adicionarConta(novaConta);
-                                    return contaRepository.persist(novaConta);
-                                })
+                                .onItem().transformToUni(agenciaDestino ->
+                                        gerarNumeroContaDisponivel()
+                                                .onItem().transformToUni(numeroContaDisponivel -> {
+                                                    Conta novaConta = instanciarContaPolimorficamentePorPerfilCliente(
+                                                            agenciaDestino,
+                                                            clienteTitular,
+                                                            numeroContaDisponivel
+                                                    );
+                                                    agenciaDestino.adicionarConta(novaConta);
+                                                    return contaRepository.persist(novaConta);
+                                                })
+                                )
                 );
     }
 
-    private Conta instanciarContaPolimorficamentePorPerfilCliente(Agencia agencia, Cliente clienteTitular) {
+    private Uni<String> gerarNumeroContaDisponivel() {
+        String numeroCandidato = Conta.gerarNovoNumeroContaComDigito();
+        return contaRepository.existePorNumeroConta(numeroCandidato)
+                .onItem().transformToUni(jaExiste -> {
+                    if (Boolean.TRUE.equals(jaExiste)) {
+                        return gerarNumeroContaDisponivel();
+                    }
+                    return Uni.createFrom().item(numeroCandidato);
+                });
+    }
+
+    private Conta instanciarContaPolimorficamentePorPerfilCliente(
+            Agencia agencia,
+            Cliente clienteTitular,
+            String numeroConta) {
         if (clienteTitular.obterTipoCliente() == TipoCliente.PESSOA_FISICA) {
-            return new ContaCorrente(agencia, clienteTitular);
+            return new ContaCorrente(agencia, clienteTitular, numeroConta);
         }
         if (clienteTitular.obterTipoCliente() == TipoCliente.PESSOA_JURIDICA) {
-            return new ContaEmpresarial(agencia, clienteTitular);
+            return new ContaEmpresarial(agencia, clienteTitular, numeroConta);
         }
         throw new RegraNegocioException("Tipo de cliente não suportado para abertura de conta: " + clienteTitular.obterTipoCliente());
     }
