@@ -26,6 +26,11 @@ public class ContaRepository implements PanacheRepositoryBase<Conta, UUID> {
         return find("numeroConta", numeroConta).firstResult();
     }
 
+    public Uni<Boolean> existePorNumeroConta(String numeroConta) {
+        return count("numeroConta", numeroConta)
+                .onItem().transform(quantidadeEncontrada -> quantidadeEncontrada > 0);
+    }
+
     public Uni<ContaTecnica> buscarContaTecnicaPorTipo(TipoContaTecnica tipoContaTecnica) {
         return find("from ContaTecnica where tipoContaTecnica = ?1", tipoContaTecnica)
                 .firstResult();
