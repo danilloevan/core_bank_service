@@ -108,7 +108,7 @@ public class MotorTransacaoService {
                                 )
                                 .onItem().transformToUni(contaOrigem ->
                                         chavePixRepository.buscarPorValorChave(chavePixDestino != null ? chavePixDestino.trim() : "")
-                                                .onItem().transform(ChavePix::getConta)
+                                                .onItem().ifNotNull().transform(ChavePix::getConta)
                                                 .onItem().transformToUni(contaDestinoEncontrada ->
                                                         montarContextoParaContaOrigem(contaOrigem.getId(), TransacaoPix.class)
                                                                 .onItem().transformToUni(contextoTransacao -> {
