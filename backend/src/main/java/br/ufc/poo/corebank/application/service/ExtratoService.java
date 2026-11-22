@@ -59,24 +59,23 @@ public class ExtratoService {
                             ? ledgerRepository.calcularSaldoAntesDeInstante(contaEncontrada.getId(), instanteInicio)
                             : Uni.createFrom().item(LancamentoContabil.normalizarValorMonetario(BigDecimal.ZERO));
 
-                    Uni<List<LancamentoContabil>> lancamentosNoPeriodoUni = ledgerRepository.listarPorContaEPeriodo(
-                            contaEncontrada.getId(),
-                            instanteInicio,
-                            instanteFim,
-                            filtroTipoLancamentoOpcional
-                    );
-
-                    return Uni.combine().all().unis(saldoAnteriorUni, lancamentosNoPeriodoUni)
-                            .asTuple()
-                            .onItem().transform(dadosExtrato ->
-                                    ExtratoConta.construirExtrato(
-                                            contaEncontrada,
+                    return saldoAnteriorUni.onItem().transformToUni(saldoAnterior ->
+                            ledgerRepository.listarPorContaEPeriodo(
+                                            contaEncontrada.getId(),
                                             instanteInicio,
                                             instanteFim,
-                                            dadosExtrato.getItem1(),
-                                            dadosExtrato.getItem2()
+                                            filtroTipoLancamentoOpcional
                                     )
-                            );
+                                    .onItem().transform(lancamentosNoPeriodo ->
+                                            ExtratoConta.construirExtrato(
+                                                    contaEncontrada,
+                                                    instanteInicio,
+                                                    instanteFim,
+                                                    saldoAnterior,
+                                                    lancamentosNoPeriodo
+                                            )
+                                    )
+                    );
                 });
     }
 

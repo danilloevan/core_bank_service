@@ -243,35 +243,35 @@ public class MotorTransacaoService {
                 ? ledgerRepository.calcularSaldoAtualPorContaId(contaOrigemIdOpcional)
                 : Uni.createFrom().item(LancamentoContabil.normalizarValorMonetario(BigDecimal.ZERO));
 
-        Uni<BigDecimal> totalMovimentadoHojeUni = (contaOrigemIdOpcional != null)
-                ? transacaoRepository.calcularTotalMovimentadoNoPeriodo(
-                        contaOrigemIdOpcional,
-                        classeTipoTransacao,
-                        inicioDoDia,
-                        fimDoDia
-                )
-                : Uni.createFrom().item(LancamentoContabil.normalizarValorMonetario(BigDecimal.ZERO));
+        return saldoOrigemUni.onItem().transformToUni(saldoOrigem -> {
+            Uni<BigDecimal> totalMovimentadoHojeUni = (contaOrigemIdOpcional != null)
+                    ? transacaoRepository.calcularTotalMovimentadoNoPeriodo(
+                            contaOrigemIdOpcional,
+                            classeTipoTransacao,
+                            inicioDoDia,
+                            fimDoDia
+                    )
+                    : Uni.createFrom().item(LancamentoContabil.normalizarValorMonetario(BigDecimal.ZERO));
 
-        Uni<ContaTecnica> contaCaixaUni = contaRepository.buscarContaTecnicaPorTipo(TipoContaTecnica.CAIXA_TESOURARIA);
-        Uni<ContaTecnica> contaTarifasUni = contaRepository.buscarContaTecnicaPorTipo(TipoContaTecnica.RECEITA_TARIFAS);
-        Uni<ContaTecnica> contaLiquidacaoUni = contaRepository.buscarContaTecnicaPorTipo(TipoContaTecnica.LIQUIDACAO_EXTERNA);
-
-        return Uni.combine().all().unis(
-                        saldoOrigemUni,
-                        totalMovimentadoHojeUni,
-                        contaCaixaUni,
-                        contaTarifasUni,
-                        contaLiquidacaoUni
-                ).asTuple()
-                .onItem().transform(insumosCombinados -> new ContextoTransacao(
-                        insumosCombinados.getItem1(),
-                        insumosCombinados.getItem2(),
-                        insumosCombinados.getItem3(),
-                        insumosCombinados.getItem4(),
-                        insumosCombinados.getItem5(),
-                        agoraNoFusoBancario,
-                        validarJanelaHorarioTed
-                ));
+            return totalMovimentadoHojeUni.onItem().transformToUni(totalMovimentadoHoje ->
+                    contaRepository.buscarContaTecnicaPorTipo(TipoContaTecnica.CAIXA_TESOURARIA)
+                            .onItem().transformToUni(contaCaixa ->
+                                    contaRepository.buscarContaTecnicaPorTipo(TipoContaTecnica.RECEITA_TARIFAS)
+                                            .onItem().transformToUni(contaTarifas ->
+                                                    contaRepository.buscarContaTecnicaPorTipo(TipoContaTecnica.LIQUIDACAO_EXTERNA)
+                                                            .onItem().transform(contaLiquidacao -> new ContextoTransacao(
+                                                                    saldoOrigem,
+                                                                    totalMovimentadoHoje,
+                                                                    contaCaixa,
+                                                                    contaTarifas,
+                                                                    contaLiquidacao,
+                                                                    agoraNoFusoBancario,
+                                                                    validarJanelaHorarioTed
+                                                            ))
+                                            )
+                            )
+            );
+        });
     }
 
     private String resolverChaveIdempotencia(String chaveIdempotenciaInformada) {

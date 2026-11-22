@@ -19,7 +19,13 @@ public class ContaRepository implements PanacheRepositoryBase<Conta, UUID> {
     }
 
     public Uni<Conta> buscarPorIdComBloqueioPessimista(UUID contaId) {
-        return findById(contaId, LockModeType.PESSIMISTIC_WRITE);
+        return getSession()
+                .onItem().transformToUni(sessaoHibernate ->
+                        sessaoHibernate.createSelectionQuery("select c from Conta c where c.id = :contaId", Conta.class)
+                                .setParameter("contaId", contaId)
+                                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                                .getSingleResultOrNull()
+                );
     }
 
     public Uni<Conta> buscarPorNumeroConta(String numeroConta) {
@@ -32,7 +38,7 @@ public class ContaRepository implements PanacheRepositoryBase<Conta, UUID> {
     }
 
     public Uni<ContaTecnica> buscarContaTecnicaPorTipo(TipoContaTecnica tipoContaTecnica) {
-        return find("from ContaTecnica where tipoContaTecnica = ?1", tipoContaTecnica)
+        return find("select c from ContaTecnica c where c.tipoContaTecnica = ?1", tipoContaTecnica)
                 .firstResult();
     }
 

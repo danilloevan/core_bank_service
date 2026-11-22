@@ -21,75 +21,78 @@ import java.util.UUID;
 @ApplicationScoped
 public class SaldoService {
 
-    private final ContaRepository contaRepository;
-    private final LedgerRepository ledgerRepository;
+        private final ContaRepository contaRepository;
+        private final LedgerRepository ledgerRepository;
 
-    public SaldoService(ContaRepository contaRepository, LedgerRepository ledgerRepository) {
-        this.contaRepository = contaRepository;
-        this.ledgerRepository = ledgerRepository;
-    }
-
-    @WithSession
-    public Uni<BigDecimal> calcularSaldoDisponivel(UUID contaId) {
-        return verificarContaExistente(contaId)
-                .onItem().transformToUni(contaEncontrada ->
-                        ledgerRepository.calcularSaldoAtualPorContaId(contaEncontrada.getId())
-                );
-    }
-
-    @WithSession
-    public Uni<BigDecimal> calcularSaldoNaDataCorte(UUID contaId, Instant instanteCorte) {
-        if (instanteCorte == null) {
-            return Uni.createFrom().failure(new RegraNegocioException("A data de corte é obrigatória."));
+        public SaldoService(ContaRepository contaRepository, LedgerRepository ledgerRepository) {
+                this.contaRepository = contaRepository;
+                this.ledgerRepository = ledgerRepository;
         }
-        return verificarContaExistente(contaId)
-                .onItem().transformToUni(contaEncontrada ->
-                        ledgerRepository.calcularSaldoAteInstante(contaEncontrada.getId(), instanteCorte)
-                );
-    }
 
-    @WithSession
-    public Uni<ResumoSaldoConta> consultarResumoSaldo(UUID contaId) {
-        return verificarContaExistente(contaId)
-                .onItem().transformToUni(contaEncontrada -> {
-                    Uni<BigDecimal> totalCreditosUni = ledgerRepository.somarPorContaETipo(contaId, TipoLancamento.CREDITO);
-                    Uni<BigDecimal> totalDebitosUni = ledgerRepository.somarPorContaETipo(contaId, TipoLancamento.DEBITO);
-                    Uni<Long> quantidadeLancamentosUni = ledgerRepository.contarLancamentosPorContaId(contaId);
+        @WithSession
+        public Uni<BigDecimal> calcularSaldoDisponivel(UUID contaId) {
+                return verificarContaExistente(contaId)
+                                .onItem().transformToUni(contaEncontrada -> ledgerRepository
+                                                .calcularSaldoAtualPorContaId(contaEncontrada.getId()));
+        }
 
-                    return Uni.combine().all().unis(totalCreditosUni, totalDebitosUni, quantidadeLancamentosUni)
-                            .asTuple()
-                            .onItem().transform(resultadosCombinados -> {
-                                BigDecimal totalCreditos = LancamentoContabil.normalizarValorMonetario(resultadosCombinados.getItem1());
-                                BigDecimal totalDebitos = LancamentoContabil.normalizarValorMonetario(resultadosCombinados.getItem2());
-                                long quantidadeLancamentos = resultadosCombinados.getItem3();
-                                BigDecimal saldoDisponivel = LancamentoContabil.normalizarValorMonetario(
-                                        totalCreditos.subtract(totalDebitos)
-                                );
+        @WithSession
+        public Uni<BigDecimal> calcularSaldoNaDataCorte(UUID contaId, Instant instanteCorte) {
+                if (instanteCorte == null) {
+                        return Uni.createFrom().failure(new RegraNegocioException("A data de corte é obrigatória."));
+                }
+                return verificarContaExistente(contaId)
+                                .onItem().transformToUni(contaEncontrada -> ledgerRepository
+                                                .calcularSaldoAteInstante(contaEncontrada.getId(), instanteCorte));
+        }
 
-                                return new ResumoSaldoConta(
-                                        contaEncontrada.getId(),
-                                        contaEncontrada.getNumeroConta(),
-                                        saldoDisponivel,
-                                        totalCreditos,
-                                        totalDebitos,
-                                        quantidadeLancamentos,
-                                        Instant.now()
-                                );
-                            });
-                });
-    }
+        @WithSession
+        public Uni<ResumoSaldoConta> consultarResumoSaldo(UUID contaId) {
+                return verificarContaExistente(contaId)
+                                .onItem()
+                                .transformToUni(contaEncontrada -> ledgerRepository
+                                                .somarPorContaETipo(contaId, TipoLancamento.CREDITO)
+                                                .onItem()
+                                                .transformToUni(totalCreditosBruto -> ledgerRepository
+                                                                .somarPorContaETipo(contaId, TipoLancamento.DEBITO)
+                                                                .onItem()
+                                                                .transformToUni(totalDebitosBruto -> ledgerRepository
+                                                                                .contarLancamentosPorContaId(contaId)
+                                                                                .onItem()
+                                                                                .transform(quantidadeLancamentos -> {
+                                                                                        BigDecimal totalCreditos = LancamentoContabil
+                                                                                                        .normalizarValorMonetario(
+                                                                                                                        totalCreditosBruto);
+                                                                                        BigDecimal totalDebitos = LancamentoContabil
+                                                                                                        .normalizarValorMonetario(
+                                                                                                                        totalDebitosBruto);
+                                                                                        BigDecimal saldoDisponivel = LancamentoContabil
+                                                                                                        .normalizarValorMonetario(
+                                                                                                                        totalCreditos.subtract(
+                                                                                                                                        totalDebitos));
 
-    @WithTransaction
-    public Uni<List<LancamentoContabil>> registrarPartidasDobradas(List<LancamentoContabil> lancamentosParaPersistir) {
-        VerificadorPartidasDobradas.validarEquilibrioPartidasDobradas(lancamentosParaPersistir);
-        return ledgerRepository.persist(lancamentosParaPersistir)
-                .replaceWith(lancamentosParaPersistir);
-    }
+                                                                                        return new ResumoSaldoConta(
+                                                                                                        contaEncontrada.getId(),
+                                                                                                        contaEncontrada.getNumeroConta(),
+                                                                                                        saldoDisponivel,
+                                                                                                        totalCreditos,
+                                                                                                        totalDebitos,
+                                                                                                        quantidadeLancamentos,
+                                                                                                        Instant.now());
+                                                                                }))));
+        }
 
-    private Uni<br.ufc.poo.corebank.domain.model.conta.Conta> verificarContaExistente(UUID contaId) {
-        return contaRepository.buscarPorId(contaId)
-                .onItem().ifNull().failWith(() ->
-                        new RecursoNaoEncontradoException("Conta bancária não encontrada para o ID: " + contaId)
-                );
-    }
+        @WithTransaction
+        public Uni<List<LancamentoContabil>> registrarPartidasDobradas(
+                        List<LancamentoContabil> lancamentosParaPersistir) {
+                VerificadorPartidasDobradas.validarEquilibrioPartidasDobradas(lancamentosParaPersistir);
+                return ledgerRepository.persist(lancamentosParaPersistir)
+                                .replaceWith(lancamentosParaPersistir);
+        }
+
+        private Uni<br.ufc.poo.corebank.domain.model.conta.Conta> verificarContaExistente(UUID contaId) {
+                return contaRepository.buscarPorId(contaId)
+                                .onItem().ifNull().failWith(() -> new RecursoNaoEncontradoException(
+                                                "Conta bancária não encontrada para o ID: " + contaId));
+        }
 }
